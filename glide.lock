@@ -1,0 +1,26 @@
+hash: 158ce912f7f738b48482e389cd77dc2cc45ea33b489d568719c6370876414be7
+updated: 2018-03-02T17:42:52.727709295-05:00
+imports:
+- name: github.com/erikstmartin/go-testdb
+  version: 8d10e4a1bae52cd8b81ffdec3445890d6dccab3d
+- name: github.com/kellydunn/golang-geo
+  version: 6f16b0ccf2a6ebd1a234daacfb6199510fbd0db4
+- name: github.com/kylelemons/go-gypsy
+  version: 08cad365cd28a7fba23bb1e57aa43c5e18ad8bb8
+  subpackages:
+  - yaml
+- name: github.com/lib/pq
+  version: 88edab0803230a3898347e77b474f8c1820a1f20
+  subpackages:
+  - oid
+- name: github.com/traetox/speedtest
+  version: 3f3ef42074fdbf6264b7e50822d6b51c8218c061
+  subpackages:
+  - speedtestdotnet
+- name: github.com/ziutek/mymysql
+  version: ff6cc86d3d933e6c0e3185a19fb46e171a7651b2
+  subpackages:
+  - godrv
+  - mysql
+  - native
+testImports: []

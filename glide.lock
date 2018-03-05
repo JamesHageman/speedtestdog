@@ -1,5 +1,5 @@
 hash: 158ce912f7f738b48482e389cd77dc2cc45ea33b489d568719c6370876414be7
-updated: 2018-03-05T13:18:31.096417794-05:00
+updated: 2018-03-05T17:51:48.151416416-05:00
 imports:
 - name: github.com/DataDog/datadog-go
   version: 72108a55170ce37441a28f16e9cad917eec0aca4
@@ -21,6 +21,8 @@ imports:
   version: 3f3ef42074fdbf6264b7e50822d6b51c8218c061
   subpackages:
   - speedtestdotnet
+- name: github.com/yelinaung/wifi-name
+  version: c7a0151f0b14767c9b7c5d1d0e6bb8ddbd1ab692
 - name: github.com/ziutek/mymysql
   version: ff6cc86d3d933e6c0e3185a19fb46e171a7651b2
   subpackages:

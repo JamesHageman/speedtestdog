@@ -7,6 +7,7 @@ import (
 
 	"github.com/DataDog/datadog-go/statsd"
 	stdn "github.com/traetox/speedtest/speedtestdotnet"
+	wifiname "github.com/yelinaung/wifi-name"
 )
 
 const (
@@ -16,6 +17,7 @@ const (
 
 var (
 	statsdAddress = os.Getenv("STATSD_ADDR")
+	wifiName      = wifiname.WifiName()
 )
 
 type speed uint64
@@ -83,8 +85,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	dog.Namespace = "speedtest."
-	dog.Tags = append(dog.Tags, "speedtest.server:"+sc.server.Host)
+	dog.Tags = append(dog.Tags,
+		"speedtest.server:"+sc.server.Host,
+		"speedtest.wifi_name:"+wifiName,
+	)
 
 	downloads := make(chan float64)
 	uploads := make(chan float64)
@@ -106,7 +112,7 @@ func main() {
 		return float64(duration), err
 	})
 
-	log.Println("Starting...")
+	log.Print("Monitoring network ", wifiName, "...")
 
 	for {
 		var err error

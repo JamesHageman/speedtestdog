@@ -18,7 +18,7 @@ var (
 	statsdAddress = os.Getenv("STATSD_ADDR")
 )
 
-type Speed uint64
+type speed uint64
 type producer func() (float64, error)
 
 func init() {
@@ -27,7 +27,7 @@ func init() {
 	}
 }
 
-func (s Speed) String() string {
+func (s speed) String() string {
 	return stdn.HumanSpeed(uint64(s))
 }
 
@@ -35,14 +35,14 @@ type speedtestConfig struct {
 	server *stdn.Testserver
 }
 
-func (sc *speedtestConfig) Download() (Speed, error) {
+func (sc *speedtestConfig) Download() (speed, error) {
 	s, err := sc.server.Downstream(duration)
-	return Speed(s), err
+	return speed(s), err
 }
 
-func (sc *speedtestConfig) Upload() (Speed, error) {
+func (sc *speedtestConfig) Upload() (speed, error) {
 	s, err := sc.server.Upstream(duration)
-	return Speed(s), err
+	return speed(s), err
 }
 
 func (sc *speedtestConfig) Ping() (time.Duration, error) {
@@ -84,6 +84,7 @@ func main() {
 		log.Fatal(err)
 	}
 	dog.Namespace = "speedtest."
+	dog.Tags = append(dog.Tags, "speedtest.server:"+sc.server.Host)
 
 	downloads := make(chan float64)
 	uploads := make(chan float64)
@@ -111,10 +112,10 @@ func main() {
 		var err error
 		select {
 		case d := <-downloads:
-			log.Println("Download:\t", Speed(d))
+			log.Println("Download:\t", speed(d))
 			err = dog.Gauge("download", d, nil, 1)
 		case u := <-uploads:
-			log.Println("Upload:\t", Speed(u))
+			log.Println("Upload:\t", speed(u))
 			err = dog.Gauge("upload", u, nil, 1)
 		case p := <-ping:
 			log.Println("Ping:\t", time.Duration(p))
@@ -123,7 +124,7 @@ func main() {
 			log.Fatalln("Error producing metric:", produceErr)
 		}
 		if err != nil {
-			log.Fatal("DataDog error:", err)
+			log.Fatalln("DataDog error:", err)
 		}
 	}
 }

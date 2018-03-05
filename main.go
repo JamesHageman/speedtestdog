@@ -56,10 +56,9 @@ func makeSpeedTestConfig() (*speedtestConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	server := cfg.Servers[0]
 
 	sc := new(speedtestConfig)
-	sc.server = &server
+	sc.server = &cfg.Servers[0]
 	return sc, nil
 }
 
@@ -119,13 +118,13 @@ func main() {
 		select {
 		case d := <-downloads:
 			log.Println("Download:\t", speed(d))
-			err = dog.Gauge("download", d, nil, 1)
+			err = dog.Histogram("download", d, nil, 1)
 		case u := <-uploads:
 			log.Println("Upload:\t", speed(u))
-			err = dog.Gauge("upload", u, nil, 1)
+			err = dog.Histogram("upload", u, nil, 1)
 		case p := <-ping:
 			log.Println("Ping:\t", time.Duration(p))
-			err = dog.Gauge("ping", p, nil, 1)
+			err = dog.Histogram("ping", p, nil, 1)
 		case produceErr := <-errCh:
 			log.Fatalln("Error producing metric:", produceErr)
 		}

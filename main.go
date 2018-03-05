@@ -18,13 +18,14 @@ var (
 	statsdAddress = os.Getenv("STATSD_ADDR")
 )
 
+type Speed uint64
+type producer func() (float64, error)
+
 func init() {
 	if statsdAddress == "" {
 		log.Fatal("STATSD_ADDR not given")
 	}
 }
-
-type Speed uint64
 
 func (s Speed) String() string {
 	return stdn.HumanSpeed(uint64(s))
@@ -44,6 +45,10 @@ func (sc *speedtestConfig) Upload() (Speed, error) {
 	return Speed(s), err
 }
 
+func (sc *speedtestConfig) Ping() (time.Duration, error) {
+	return sc.server.MedianPing(10)
+}
+
 func makeSpeedTestConfig() (*speedtestConfig, error) {
 	cfg, err := stdn.GetConfig()
 	if err != nil {
@@ -56,26 +61,15 @@ func makeSpeedTestConfig() (*speedtestConfig, error) {
 	return sc, nil
 }
 
-func (sc *speedtestConfig) pollDownloads(c chan<- Speed) {
+func poll(c chan<- float64, e chan<- error, f producer) {
 	for {
-		s, err := sc.Download()
+		n, err := f()
 		if err != nil {
-			log.Println("Error fetching download speed:", err)
+			e <- err
 		} else {
-			c <- s
+			c <- n
 		}
-		time.Sleep(pollDelay)
-	}
-}
 
-func (sc *speedtestConfig) pollUploads(c chan<- Speed) {
-	for {
-		s, err := sc.Upload()
-		if err != nil {
-			log.Println("Error fetching upload speed:", err)
-		} else {
-			c <- s
-		}
 		time.Sleep(pollDelay)
 	}
 }
@@ -91,24 +85,45 @@ func main() {
 	}
 	dog.Namespace = "speedtest."
 
-	downloads := make(chan Speed)
-	uploads := make(chan Speed)
+	downloads := make(chan float64)
+	uploads := make(chan float64)
+	ping := make(chan float64)
+	errCh := make(chan error)
 
-	go sc.pollDownloads(downloads)
-	go sc.pollUploads(uploads)
+	go poll(downloads, errCh, func() (float64, error) {
+		speed, err := sc.Download()
+		return float64(speed), err
+	})
+
+	go poll(uploads, errCh, func() (float64, error) {
+		speed, err := sc.Upload()
+		return float64(speed), err
+	})
+
+	go poll(ping, errCh, func() (float64, error) {
+		duration, err := sc.Ping()
+		return float64(duration), err
+	})
+
+	log.Println("Starting...")
 
 	for {
 		var err error
 		select {
 		case d := <-downloads:
-			log.Println("Download:\t", d)
-			err = dog.Gauge("download", float64(d), nil, 1)
+			log.Println("Download:\t", Speed(d))
+			err = dog.Gauge("download", d, nil, 1)
 		case u := <-uploads:
-			log.Println("Upload:\t", u)
-			err = dog.Gauge("upload", float64(u), nil, 1)
+			log.Println("Upload:\t", Speed(u))
+			err = dog.Gauge("upload", u, nil, 1)
+		case p := <-ping:
+			log.Println("Ping:\t", time.Duration(p))
+			err = dog.Gauge("ping", p, nil, 1)
+		case produceErr := <-errCh:
+			log.Fatalln("Error producing metric:", produceErr)
 		}
 		if err != nil {
-			log.Println("DataDog error:", err)
+			log.Fatal("DataDog error:", err)
 		}
 	}
 }

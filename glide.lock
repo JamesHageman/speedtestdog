@@ -1,6 +1,10 @@
 hash: 158ce912f7f738b48482e389cd77dc2cc45ea33b489d568719c6370876414be7
-updated: 2018-03-02T17:42:52.727709295-05:00
+updated: 2018-03-05T13:18:31.096417794-05:00
 imports:
+- name: github.com/DataDog/datadog-go
+  version: 72108a55170ce37441a28f16e9cad917eec0aca4
+  subpackages:
+  - statsd
 - name: github.com/erikstmartin/go-testdb
   version: 8d10e4a1bae52cd8b81ffdec3445890d6dccab3d
 - name: github.com/kellydunn/golang-geo

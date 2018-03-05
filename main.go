@@ -5,11 +5,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/DataDog/datadog-go/statsd"
 	stdn "github.com/traetox/speedtest/speedtestdotnet"
 )
 
 const (
-	duration = 1
+	duration  = 1
+	pollDelay = 10 * time.Second
 )
 
 var (
@@ -62,7 +64,7 @@ func (sc *speedtestConfig) pollDownloads(c chan<- Speed) {
 		} else {
 			c <- s
 		}
-		time.Sleep(time.Second * 10)
+		time.Sleep(pollDelay)
 	}
 }
 
@@ -74,7 +76,7 @@ func (sc *speedtestConfig) pollUploads(c chan<- Speed) {
 		} else {
 			c <- s
 		}
-		time.Sleep(time.Second * 10)
+		time.Sleep(pollDelay)
 	}
 }
 
@@ -83,6 +85,11 @@ func main() {
 	if err != nil {
 		log.Fatal("error building speedtestConfig: ", err)
 	}
+	dog, err := statsd.New(statsdAddress)
+	if err != nil {
+		log.Fatal(err)
+	}
+	dog.Namespace = "speedtest."
 
 	downloads := make(chan Speed)
 	uploads := make(chan Speed)
@@ -91,11 +98,17 @@ func main() {
 	go sc.pollUploads(uploads)
 
 	for {
+		var err error
 		select {
 		case d := <-downloads:
 			log.Println("Download:\t", d)
+			err = dog.Gauge("download", float64(d), nil, 1)
 		case u := <-uploads:
 			log.Println("Upload:\t", u)
+			err = dog.Gauge("upload", float64(u), nil, 1)
+		}
+		if err != nil {
+			log.Println("DataDog error:", err)
 		}
 	}
 }

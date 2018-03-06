@@ -81,15 +81,6 @@ func makeSpeedTestConfig() (*speedtestConfig, error) {
 	return &speedtestConfig{server: server}, nil
 }
 
-func generate(c chan<- float64, e chan<- error, f producer) {
-	n, err := f()
-	if err != nil {
-		e <- err
-	} else {
-		c <- n
-	}
-}
-
 func main() {
 	sc, err := makeSpeedTestConfig()
 	if err != nil {
@@ -106,27 +97,30 @@ func main() {
 		"speedtest.wifi_name:"+wifiName,
 	)
 
-	downloads := make(chan float64)
-	uploads := make(chan float64)
-	ping := make(chan float64)
+	downloads := make(chan speed)
+	uploads := make(chan speed)
+	ping := make(chan time.Duration)
 	errCh := make(chan error)
 
 	go func() {
 		for {
-			generate(ping, errCh, func() (float64, error) {
-				duration, err := sc.Ping()
-				return float64(duration), err
-			})
+			if duration, err := sc.Ping(); err != nil {
+				errCh <- err
+			} else {
+				ping <- duration
+			}
 
-			generate(downloads, errCh, func() (float64, error) {
-				speed, err := sc.Download()
-				return float64(speed), err
-			})
+			if speed, err := sc.Download(); err != nil {
+				errCh <- err
+			} else {
+				downloads <- speed
+			}
 
-			generate(uploads, errCh, func() (float64, error) {
-				speed, err := sc.Upload()
-				return float64(speed), err
-			})
+			if speed, err := sc.Upload(); err != nil {
+				errCh <- err
+			} else {
+				uploads <- speed
+			}
 
 			time.Sleep(pollDelay)
 		}
@@ -143,14 +137,14 @@ func main() {
 		var err error
 		select {
 		case d := <-downloads:
-			log.Println("Download:\t", speed(d))
-			err = dog.Histogram("download", d, nil, 1)
+			log.Println("Download:\t", d)
+			err = dog.Histogram("download", float64(d), nil, 1)
 		case u := <-uploads:
-			log.Println("Upload:\t", speed(u))
-			err = dog.Histogram("upload", u, nil, 1)
+			log.Println("Upload:\t", u)
+			err = dog.Histogram("upload", float64(u), nil, 1)
 		case p := <-ping:
-			log.Println("Ping:\t", time.Duration(p))
-			err = dog.Histogram("ping", p, nil, 1)
+			log.Println("Ping:\t", p)
+			err = dog.Histogram("ping", float64(p), nil, 1)
 		case produceErr := <-errCh:
 			log.Fatalln("Error generating metric:", produceErr)
 		}

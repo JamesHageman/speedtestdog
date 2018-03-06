@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -51,15 +52,33 @@ func (sc *speedtestConfig) Ping() (time.Duration, error) {
 	return sc.server.MedianPing(10)
 }
 
+func closestAvailableServer(cfg *stdn.Config) (*stdn.Testserver, error) {
+	var err error
+	for _, s := range cfg.Servers[:5] {
+		if _, err = s.MedianPing(1); err != nil {
+			log.Println("failed to connect to %s, trying another: %s", s.Host, err)
+			continue
+		}
+		return &s, nil
+	}
+
+	return nil, fmt.Errorf("no available servers: %s", err)
+}
+
 func makeSpeedTestConfig() (*speedtestConfig, error) {
+	log.Println("Fetching speedtest.net configuration...")
 	cfg, err := stdn.GetConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	sc := new(speedtestConfig)
-	sc.server = &cfg.Servers[0]
-	return sc, nil
+	log.Println("Finding the closest server...")
+	server, err := closestAvailableServer(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &speedtestConfig{server: server}, nil
 }
 
 func poll(c chan<- float64, e chan<- error, f producer) {
@@ -111,7 +130,12 @@ func main() {
 		return float64(duration), err
 	})
 
-	log.Print("Monitoring network ", wifiName, "...")
+	log.Print("Monitoring network ", wifiName)
+	log.Print("Polling server ", sc.server.Host, " in ", sc.server.Name)
+	err = dog.Incr("boot", nil, 1)
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	for {
 		var err error

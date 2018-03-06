@@ -105,19 +105,19 @@ func main() {
 	go func() {
 		for {
 			if duration, err := sc.Ping(); err != nil {
-				errCh <- err
+				errCh <- fmt.Errorf("Error getting ping: %s", err)
 			} else {
 				ping <- duration
 			}
 
 			if speed, err := sc.Download(); err != nil {
-				errCh <- err
+				errCh <- fmt.Errorf("Error getting download: %s", err)
 			} else {
 				downloads <- speed
 			}
 
 			if speed, err := sc.Upload(); err != nil {
-				errCh <- err
+				errCh <- fmt.Errorf("Error getting upload: %s", err)
 			} else {
 				uploads <- speed
 			}
@@ -134,22 +134,22 @@ func main() {
 	}
 
 	for {
-		var err error
+		var ddErr error
 		select {
 		case d := <-downloads:
 			log.Println("Download:\t", d)
-			err = dog.Histogram("download", float64(d), nil, 1)
+			ddErr = dog.Histogram("download", float64(d), nil, 1)
 		case u := <-uploads:
 			log.Println("Upload:\t", u)
-			err = dog.Histogram("upload", float64(u), nil, 1)
+			ddErr = dog.Histogram("upload", float64(u), nil, 1)
 		case p := <-ping:
 			log.Println("Ping:\t", p)
-			err = dog.Histogram("ping", float64(p), nil, 1)
-		case produceErr := <-errCh:
-			log.Fatalln("Error generating metric:", produceErr)
+			ddErr = dog.Histogram("ping", float64(p), nil, 1)
+		case err := <-errCh:
+			log.Fatalln(err)
 		}
-		if err != nil {
-			log.Fatalln("DataDog error:", err)
+		if ddErr != nil {
+			log.Fatalln("DataDog error:", ddErr)
 		}
 	}
 }

@@ -49,7 +49,7 @@ func (sc *speedtestConfig) Upload() (speed, error) {
 }
 
 func (sc *speedtestConfig) Ping() (time.Duration, error) {
-	return sc.server.MedianPing(10)
+	return sc.server.MedianPing(3)
 }
 
 func closestAvailableServer(cfg *stdn.Config) (*stdn.Testserver, error) {
@@ -113,19 +113,19 @@ func main() {
 
 	go func() {
 		for {
-			go generate(downloads, errCh, func() (float64, error) {
+			generate(ping, errCh, func() (float64, error) {
+				duration, err := sc.Ping()
+				return float64(duration), err
+			})
+
+			generate(downloads, errCh, func() (float64, error) {
 				speed, err := sc.Download()
 				return float64(speed), err
 			})
 
-			go generate(uploads, errCh, func() (float64, error) {
+			generate(uploads, errCh, func() (float64, error) {
 				speed, err := sc.Upload()
 				return float64(speed), err
-			})
-
-			go generate(ping, errCh, func() (float64, error) {
-				duration, err := sc.Ping()
-				return float64(duration), err
 			})
 
 			time.Sleep(pollDelay)

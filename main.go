@@ -81,16 +81,12 @@ func makeSpeedTestConfig() (*speedtestConfig, error) {
 	return &speedtestConfig{server: server}, nil
 }
 
-func poll(c chan<- float64, e chan<- error, f producer) {
-	for {
-		n, err := f()
-		if err != nil {
-			e <- err
-		} else {
-			c <- n
-		}
-
-		time.Sleep(pollDelay)
+func generate(c chan<- float64, e chan<- error, f producer) {
+	n, err := f()
+	if err != nil {
+		e <- err
+	} else {
+		c <- n
 	}
 }
 
@@ -115,20 +111,26 @@ func main() {
 	ping := make(chan float64)
 	errCh := make(chan error)
 
-	go poll(downloads, errCh, func() (float64, error) {
-		speed, err := sc.Download()
-		return float64(speed), err
-	})
+	go func() {
+		for {
+			go generate(downloads, errCh, func() (float64, error) {
+				speed, err := sc.Download()
+				return float64(speed), err
+			})
 
-	go poll(uploads, errCh, func() (float64, error) {
-		speed, err := sc.Upload()
-		return float64(speed), err
-	})
+			go generate(uploads, errCh, func() (float64, error) {
+				speed, err := sc.Upload()
+				return float64(speed), err
+			})
 
-	go poll(ping, errCh, func() (float64, error) {
-		duration, err := sc.Ping()
-		return float64(duration), err
-	})
+			go generate(ping, errCh, func() (float64, error) {
+				duration, err := sc.Ping()
+				return float64(duration), err
+			})
+
+			time.Sleep(pollDelay)
+		}
+	}()
 
 	log.Print("Monitoring network ", wifiName)
 	log.Print("Polling server ", sc.server.Host, " in ", sc.server.Name)
@@ -150,7 +152,7 @@ func main() {
 			log.Println("Ping:\t", time.Duration(p))
 			err = dog.Histogram("ping", p, nil, 1)
 		case produceErr := <-errCh:
-			log.Fatalln("Error producing metric:", produceErr)
+			log.Fatalln("Error generating metric:", produceErr)
 		}
 		if err != nil {
 			log.Fatalln("DataDog error:", err)

@@ -13,7 +13,7 @@ import (
 
 const (
 	duration  = 1
-	pollDelay = 10 * time.Second
+	pollDelay = 30 * time.Second
 )
 
 var (

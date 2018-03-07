@@ -56,7 +56,7 @@ func closestAvailableServer(cfg *stdn.Config) (*stdn.Testserver, error) {
 	var err error
 	for _, s := range cfg.Servers[:5] {
 		if _, err = s.MedianPing(1); err != nil {
-			log.Println("failed to connect to %s, trying another: %s", s.Host, err)
+			log.Println("failed to connect to %s, trying another. Error: %s", s.Host, err)
 			continue
 		}
 		return &s, nil

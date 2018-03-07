@@ -13,16 +13,17 @@ const (
 	duration = 1
 )
 
-// Speed A bandwidth speed in bits/sec
+// Speed is bandwidth speed in bits/sec
 type Speed uint64
 
-// Client A speedtest client
+// Client is the object used to connect to a speedtest server and run speed tests.
 type Client struct {
 	server *stdn.Testserver
 	err    error
 }
 
-// Result the result of running a speed test
+// Result the result of running a speed test. It includes an Err field which will
+// be non-nil if the test failed.
 type Result struct {
 	DownloadSpeed Speed
 	UploadSpeed   Speed
@@ -45,6 +46,7 @@ func closestAvailableServer(cfg *stdn.Config) (*stdn.Testserver, error) {
 	return nil, fmt.Errorf("no available servers: %s", err)
 }
 
+// NewClient creates a speedtest.Client, or an error if it could not find a server.
 func NewClient() (*Client, error) {
 	log.Println("Fetching speedtest.net configuration...")
 	cfg, err := stdn.GetConfig()
@@ -65,52 +67,55 @@ func (s Speed) String() string {
 	return stdn.HumanSpeed(uint64(s))
 }
 
-func (sc *Client) SpeedTest() *Result {
-	sc.err = nil
-	d := sc.download()
-	u := sc.upload()
-	p := sc.ping()
+// SpeedTest runs a speedtest calculating download, upload and ping in sequence.
+func (c *Client) SpeedTest() *Result {
+	c.err = nil
+	d := c.download()
+	u := c.upload()
+	p := c.ping()
 
-	return &Result{DownloadSpeed: d, UploadSpeed: u, Ping: p, Err: sc.err}
+	return &Result{DownloadSpeed: d, UploadSpeed: u, Ping: p, Err: c.err}
 }
 
+// Host returns the address of the speedtest server.
 func (c *Client) Host() string {
 	return c.server.Host
 }
 
+// Location returns the location of the speedtest server.
 func (c *Client) Location() string {
 	return c.server.Name
 }
 
-func (sc *Client) download() Speed {
-	if sc.err != nil {
+func (c *Client) download() Speed {
+	if c.err != nil {
 		return 0
 	}
-	s, err := sc.server.Downstream(duration)
+	s, err := c.server.Downstream(duration)
 	if err != nil {
-		sc.err = fmt.Errorf("Error getting download: %s", err)
+		c.err = fmt.Errorf("Error getting download: %s", err)
 	}
 	return Speed(s)
 }
 
-func (sc *Client) upload() Speed {
-	if sc.err != nil {
+func (c *Client) upload() Speed {
+	if c.err != nil {
 		return 0
 	}
-	s, err := sc.server.Upstream(duration)
+	s, err := c.server.Upstream(duration)
 	if err != nil {
-		sc.err = fmt.Errorf("Error getting upload: %s", err)
+		c.err = fmt.Errorf("Error getting upload: %s", err)
 	}
 	return Speed(s)
 }
 
-func (sc *Client) ping() time.Duration {
-	if sc.err != nil {
+func (c *Client) ping() time.Duration {
+	if c.err != nil {
 		return 0
 	}
-	t, err := sc.server.MedianPing(3)
+	t, err := c.server.MedianPing(3)
 	if err != nil {
-		sc.err = fmt.Errorf("Error getting ping: %s", err)
+		c.err = fmt.Errorf("Error getting ping: %s", err)
 	}
 	return t
 }
@@ -128,12 +133,14 @@ func (result *Result) String() string {
 	)
 }
 
+// Reporter will report your speedtest to a DataDog statsd.Client.
 type Reporter struct {
 	Client *statsd.Client
 
 	err error
 }
 
+// Report sends the results from result to r.Client
 func (r *Reporter) Report(result *Result) error {
 	r.err = nil
 

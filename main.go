@@ -24,6 +24,20 @@ var (
 type speed uint64
 type producer func() (float64, error)
 
+type speedTestResult struct {
+	DownloadSpeed speed
+	UploadSpeed   speed
+	Ping          time.Duration
+	Err           error
+
+	dog *statsd.Client
+}
+
+type speedtestConfig struct {
+	server *stdn.Testserver
+	err    error
+}
+
 func init() {
 	if statsdAddress == "" {
 		log.Fatal("STATSD_ADDR not given")
@@ -34,22 +48,78 @@ func (s speed) String() string {
 	return stdn.HumanSpeed(uint64(s))
 }
 
-type speedtestConfig struct {
-	server *stdn.Testserver
+func (sc *speedtestConfig) SpeedTest() *speedTestResult {
+	sc.err = nil
+	d := sc.download()
+	u := sc.upload()
+	p := sc.ping()
+
+	return &speedTestResult{DownloadSpeed: d, UploadSpeed: u, Ping: p, Err: sc.err}
 }
 
-func (sc *speedtestConfig) Download() (speed, error) {
+func (sc *speedtestConfig) download() speed {
+	if sc.err != nil {
+		return 0
+	}
 	s, err := sc.server.Downstream(duration)
-	return speed(s), err
+	if err != nil {
+		sc.err = fmt.Errorf("Error getting download: %s", err)
+	}
+	return speed(s)
 }
 
-func (sc *speedtestConfig) Upload() (speed, error) {
+func (sc *speedtestConfig) upload() speed {
+	if sc.err != nil {
+		return 0
+	}
 	s, err := sc.server.Upstream(duration)
-	return speed(s), err
+	if err != nil {
+		sc.err = fmt.Errorf("Error getting upload: %s", err)
+	}
+	return speed(s)
 }
 
-func (sc *speedtestConfig) Ping() (time.Duration, error) {
-	return sc.server.MedianPing(3)
+func (sc *speedtestConfig) ping() time.Duration {
+	if sc.err != nil {
+		return 0
+	}
+	t, err := sc.server.MedianPing(3)
+	if err != nil {
+		sc.err = fmt.Errorf("Error getting ping: %s", err)
+	}
+	return t
+}
+
+func (result *speedTestResult) histogram(name string, value float64) {
+	if result.Err != nil {
+		return
+	}
+
+	result.Err = result.dog.Histogram(name, value, nil, 1)
+}
+
+func (result *speedTestResult) Report(dog *statsd.Client) error {
+	result.dog = dog
+	result.Err = nil
+
+	result.histogram("download", float64(result.DownloadSpeed))
+	result.histogram("upload", float64(result.UploadSpeed))
+	result.histogram("ping", float64(result.Ping))
+
+	return result.Err
+}
+
+func (result *speedTestResult) String() string {
+	if result.Err != nil {
+		return fmt.Sprintf("Failed speedtest: %s", result.Err)
+	}
+
+	return fmt.Sprintf(
+		"Download:\t%s\tUpload:\t%s\tPing:\t%s",
+		result.DownloadSpeed,
+		result.UploadSpeed,
+		result.Ping,
+	)
 }
 
 func closestAvailableServer(cfg *stdn.Config) (*stdn.Testserver, error) {
@@ -97,59 +167,33 @@ func main() {
 		"speedtest.wifi_name:"+wifiName,
 	)
 
-	downloads := make(chan speed)
-	uploads := make(chan speed)
-	ping := make(chan time.Duration)
-	errCh := make(chan error)
-
-	go func() {
-		for {
-			if duration, err := sc.Ping(); err != nil {
-				errCh <- fmt.Errorf("Error getting ping: %s", err)
-			} else {
-				ping <- duration
-			}
-
-			if speed, err := sc.Download(); err != nil {
-				errCh <- fmt.Errorf("Error getting download: %s", err)
-			} else {
-				downloads <- speed
-			}
-
-			if speed, err := sc.Upload(); err != nil {
-				errCh <- fmt.Errorf("Error getting upload: %s", err)
-			} else {
-				uploads <- speed
-			}
-
-			time.Sleep(pollDelay)
-		}
-	}()
-
 	log.Print("Monitoring network ", wifiName)
 	log.Print("Polling server ", sc.server.Host, " in ", sc.server.Name)
+
 	err = dog.Incr("boot", nil, 1)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	for {
-		var ddErr error
-		select {
-		case d := <-downloads:
-			log.Println("Download:\t", d)
-			ddErr = dog.Histogram("download", float64(d), nil, 1)
-		case u := <-uploads:
-			log.Println("Upload:\t", u)
-			ddErr = dog.Histogram("upload", float64(u), nil, 1)
-		case p := <-ping:
-			log.Println("Ping:\t", p)
-			ddErr = dog.Histogram("ping", float64(p), nil, 1)
-		case err := <-errCh:
-			log.Fatalln(err)
+	results := make(chan *speedTestResult)
+
+	go func() {
+		results <- sc.SpeedTest()
+		ticks := time.NewTicker(pollDelay).C
+		for range ticks {
+			results <- sc.SpeedTest()
 		}
-		if ddErr != nil {
-			log.Fatalln("DataDog error:", ddErr)
+	}()
+
+	for result := range results {
+		if result.Err != nil {
+			log.Fatalln(result)
+		}
+
+		log.Println(result)
+		err := result.Report(dog)
+		if err != nil {
+			log.Fatalln("DataDog error:", err)
 		}
 	}
 }

@@ -94,22 +94,28 @@ func (c *Client) Location() string {
 	return c.server.Name
 }
 
-func (c *Client) download(result *Speed) error {
-	s, err := c.server.Downstream(duration)
-	*result = Speed(s)
-	return errors.Wrap(err, "Error getting download speed")
+func (c *Client) download(result *Speed) func() error {
+	return func() error {
+		s, err := c.server.Downstream(duration)
+		*result = Speed(s)
+		return errors.Wrap(err, "Error getting download speed")
+	}
 }
 
-func (c *Client) upload(result *Speed) error {
-	s, err := c.server.Upstream(duration)
-	*result = Speed(s)
-	return errors.Wrap(err, "Error getting upload speed")
+func (c *Client) upload(result *Speed) func() error {
+	return func() error {
+		s, err := c.server.Upstream(duration)
+		*result = Speed(s)
+		return errors.Wrap(err, "Error getting upload speed")
+	}
 }
 
-func (c *Client) ping(result *time.Duration) error {
-	t, err := c.server.MedianPing(3)
-	*result = t
-	return errors.Wrap(err, "Error getting ping")
+func (c *Client) ping(result *time.Duration) func() error {
+	return func() error {
+		t, err := c.server.MedianPing(3)
+		*result = t
+		return errors.Wrap(err, "Error getting ping")
+	}
 }
 
 func (result *Result) String() string {
@@ -150,22 +156,11 @@ func (r *Reporter) histogram(name string, value float64) func() error {
 	}
 }
 
-type ErrorOrErrorFunc interface{}
-
-func Try(funcs ...ErrorOrErrorFunc) error {
+func Try(funcs ...func() error) error {
 	var err error
 
 	for _, f := range funcs {
-		switch f.(type) {
-		case nil:
-			// nil error, ignore
-		case error:
-			err = f.(error)
-		case func() error:
-			err = f.(func() error)()
-		default:
-			panic(fmt.Errorf("value is not an error or an ErrFunc: %T", f))
-		}
+		err = f()
 		if err != nil {
 			return err
 		}

@@ -73,9 +73,8 @@ func (c *Client) SpeedTest() *Result {
 	var d Speed
 	var u Speed
 	var p time.Duration
-	var err error
 
-	err = Try(
+	err := Try(
 		c.download(&d),
 		c.upload(&u),
 		c.ping(&p),
@@ -166,5 +165,5 @@ func Try(funcs ...func() error) error {
 		}
 	}
 
-	return err
+	return nil
 }

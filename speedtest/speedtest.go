@@ -76,9 +76,9 @@ func (c *Client) SpeedTest() *Result {
 	var err error
 
 	err = Try(
-		WrapError(c.download(&d)),
-		WrapError(c.upload(&u)),
-		WrapError(c.ping(&p)),
+		c.download(&d),
+		c.upload(&u),
+		c.ping(&p),
 	)
 
 	return &Result{DownloadSpeed: d, UploadSpeed: u, Ping: p, Err: err}
@@ -143,27 +143,33 @@ func (r *Reporter) Report(result *Result) error {
 
 func (r *Reporter) histogram(name string, value float64) func() error {
 	return func() error {
-		return r.Client.Histogram(name, value, nil, 1)
+		return errors.Wrap(
+			r.Client.Histogram(name, value, nil, 1),
+			"failed to send metric "+name+" to datadog",
+		)
 	}
 }
 
-type ErrFunc func() error
+type ErrorOrErrorFunc interface{}
 
-func Try(funcs ...ErrFunc) error {
+func Try(funcs ...ErrorOrErrorFunc) error {
 	var err error
 
 	for _, f := range funcs {
-		err = f()
+		switch f.(type) {
+		case nil:
+			// nil error, ignore
+		case error:
+			err = f.(error)
+		case func() error:
+			err = f.(func() error)()
+		default:
+			panic(fmt.Errorf("value is not an error or an ErrFunc: %T", f))
+		}
 		if err != nil {
 			return err
 		}
 	}
 
 	return err
-}
-
-func WrapError(err error) ErrFunc {
-	return func() error {
-		return err
-	}
 }

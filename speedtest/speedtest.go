@@ -76,18 +76,9 @@ func (c *Client) SpeedTest() *Result {
 	var err error
 
 	err = Try(
-		func() error {
-			d, err = c.download()
-			return err
-		},
-		func() error {
-			u, err = c.upload()
-			return err
-		},
-		func() error {
-			p, err = c.ping()
-			return err
-		},
+		WrapError(c.download(&d)),
+		WrapError(c.upload(&u)),
+		WrapError(c.ping(&p)),
 	)
 
 	return &Result{DownloadSpeed: d, UploadSpeed: u, Ping: p, Err: err}
@@ -103,19 +94,22 @@ func (c *Client) Location() string {
 	return c.server.Name
 }
 
-func (c *Client) download() (Speed, error) {
+func (c *Client) download(result *Speed) error {
 	s, err := c.server.Downstream(duration)
-	return Speed(s), errors.Wrap(err, "Error getting download speed")
+	*result = Speed(s)
+	return errors.Wrap(err, "Error getting download speed")
 }
 
-func (c *Client) upload() (Speed, error) {
+func (c *Client) upload(result *Speed) error {
 	s, err := c.server.Upstream(duration)
-	return Speed(s), errors.Wrap(err, "Error getting upload speed")
+	*result = Speed(s)
+	return errors.Wrap(err, "Error getting upload speed")
 }
 
-func (c *Client) ping() (time.Duration, error) {
+func (c *Client) ping(result *time.Duration) error {
 	t, err := c.server.MedianPing(3)
-	return t, errors.Wrap(err, "Error getting ping")
+	*result = t
+	return errors.Wrap(err, "Error getting ping")
 }
 
 func (result *Result) String() string {
@@ -153,7 +147,9 @@ func (r *Reporter) histogram(name string, value float64) func() error {
 	}
 }
 
-func Try(funcs ...func() error) error {
+type ErrFunc func() error
+
+func Try(funcs ...ErrFunc) error {
 	var err error
 
 	for _, f := range funcs {
@@ -164,4 +160,10 @@ func Try(funcs ...func() error) error {
 	}
 
 	return err
+}
+
+func WrapError(err error) ErrFunc {
+	return func() error {
+		return err
+	}
 }

@@ -44,7 +44,7 @@ func closestAvailableServer(cfg *stdn.Config) (*stdn.Testserver, error) {
 		return &s, nil
 	}
 
-	return nil, fmt.Errorf("no available servers: %s", err)
+	return nil, errors.Wrap(err, "no available servers")
 }
 
 // NewClient creates a speedtest.Client, or an error if it could not find a server.

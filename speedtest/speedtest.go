@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/DataDog/datadog-go/statsd"
+	"github.com/pkg/errors"
 	stdn "github.com/traetox/speedtest/speedtestdotnet"
 )
 
@@ -43,7 +44,7 @@ func closestAvailableServer(cfg *stdn.Config) (*stdn.Testserver, error) {
 		return &s, nil
 	}
 
-	return nil, fmt.Errorf("no available servers: %s", err)
+	return nil, errors.Wrap(err, "no available servers")
 }
 
 // NewClient creates a speedtest.Client, or an error if it could not find a server.
@@ -69,12 +70,17 @@ func (s Speed) String() string {
 
 // SpeedTest runs a speedtest calculating download, upload and ping in sequence.
 func (c *Client) SpeedTest() *Result {
-	c.err = nil
-	d := c.download()
-	u := c.upload()
-	p := c.ping()
+	var d Speed
+	var u Speed
+	var p time.Duration
 
-	return &Result{DownloadSpeed: d, UploadSpeed: u, Ping: p, Err: c.err}
+	err := Try(
+		c.download(&d),
+		c.upload(&u),
+		c.ping(&p),
+	)
+
+	return &Result{DownloadSpeed: d, UploadSpeed: u, Ping: p, Err: err}
 }
 
 // Host returns the address of the speedtest server.
@@ -87,37 +93,28 @@ func (c *Client) Location() string {
 	return c.server.Name
 }
 
-func (c *Client) download() Speed {
-	if c.err != nil {
-		return 0
+func (c *Client) download(result *Speed) func() error {
+	return func() error {
+		s, err := c.server.Downstream(duration)
+		*result = Speed(s)
+		return errors.Wrap(err, "Error getting download speed")
 	}
-	s, err := c.server.Downstream(duration)
-	if err != nil {
-		c.err = fmt.Errorf("Error getting download: %s", err)
-	}
-	return Speed(s)
 }
 
-func (c *Client) upload() Speed {
-	if c.err != nil {
-		return 0
+func (c *Client) upload(result *Speed) func() error {
+	return func() error {
+		s, err := c.server.Upstream(duration)
+		*result = Speed(s)
+		return errors.Wrap(err, "Error getting upload speed")
 	}
-	s, err := c.server.Upstream(duration)
-	if err != nil {
-		c.err = fmt.Errorf("Error getting upload: %s", err)
-	}
-	return Speed(s)
 }
 
-func (c *Client) ping() time.Duration {
-	if c.err != nil {
-		return 0
+func (c *Client) ping(result *time.Duration) func() error {
+	return func() error {
+		t, err := c.server.MedianPing(3)
+		*result = t
+		return errors.Wrap(err, "Error getting ping")
 	}
-	t, err := c.server.MedianPing(3)
-	if err != nil {
-		c.err = fmt.Errorf("Error getting ping: %s", err)
-	}
-	return t
 }
 
 func (result *Result) String() string {
@@ -142,19 +139,31 @@ type Reporter struct {
 
 // Report sends the results from result to r.Client
 func (r *Reporter) Report(result *Result) error {
-	r.err = nil
-
-	r.histogram("download", float64(result.DownloadSpeed))
-	r.histogram("upload", float64(result.UploadSpeed))
-	r.histogram("ping", float64(result.Ping))
-
-	return r.err
+	return Try(
+		r.histogram("download", float64(result.DownloadSpeed)),
+		r.histogram("upload", float64(result.UploadSpeed)),
+		r.histogram("ping", float64(result.Ping)),
+	)
 }
 
-func (r *Reporter) histogram(name string, value float64) {
-	if r.err != nil {
-		return
+func (r *Reporter) histogram(name string, value float64) func() error {
+	return func() error {
+		return errors.Wrap(
+			r.Client.Histogram(name, value, nil, 1),
+			"failed to send metric "+name+" to datadog",
+		)
+	}
+}
+
+func Try(funcs ...func() error) error {
+	var err error
+
+	for _, f := range funcs {
+		err = f()
+		if err != nil {
+			return err
+		}
 	}
 
-	r.err = r.Client.Histogram(name, value, nil, 1)
+	return nil
 }

@@ -1,5 +1,5 @@
 hash: 158ce912f7f738b48482e389cd77dc2cc45ea33b489d568719c6370876414be7
-updated: 2018-03-05T17:51:48.151416416-05:00
+updated: 2018-03-10T12:08:33.090998888-05:00
 imports:
 - name: github.com/DataDog/datadog-go
   version: 72108a55170ce37441a28f16e9cad917eec0aca4
@@ -17,6 +17,8 @@ imports:
   version: 88edab0803230a3898347e77b474f8c1820a1f20
   subpackages:
   - oid
+- name: github.com/pkg/errors
+  version: 30136e27e2ac8d167177e8a583aa4c3fea5be833
 - name: github.com/traetox/speedtest
   version: 3f3ef42074fdbf6264b7e50822d6b51c8218c061
   subpackages:

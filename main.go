@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"os"
 	"time"
@@ -15,26 +16,14 @@ const (
 	pollDelay = 30 * time.Second
 )
 
-var (
-	statsdAddress = os.Getenv("STATSD_ADDR")
-	wifiName      = wifiname.WifiName()
-)
-
-func init() {
-	if statsdAddress == "" {
-		log.Fatal("STATSD_ADDR not given")
-	}
-}
-
 func die(err error) {
 	if err != nil {
 		log.Fatalf("[ERROR] %+v", err)
 	}
 }
 
-func buildConfig() *speedtest.Config {
+func buildConfig(configFileName string) *speedtest.Config {
 	var config *speedtest.Config
-	configFileName := "speedtestdog.json"
 	configFile, err := os.Open(configFileName)
 	if err == nil {
 		log.Println("Reading config from", configFileName)
@@ -49,22 +38,27 @@ func buildConfig() *speedtest.Config {
 }
 
 func main() {
-	config := buildConfig()
+	configFileName := flag.String("configFile", "speedtestdog.json", "the speedtest configuration json file")
+	statsdAddress := flag.String("statsdAddress", "localhost:8125", "the address of the DataDog agent")
+	wifiName := flag.String("wifiName", wifiname.WifiName(), "the name of your network")
+	flag.Parse()
+
+	config := buildConfig(*configFileName)
 	log.Printf("Config: %#v", *config)
 
 	sc, err := speedtest.NewClient(config)
 	die(err)
 
-	dog, err := statsd.New(statsdAddress)
+	dog, err := statsd.New(*statsdAddress)
 	die(err)
 
 	dog.Namespace = "speedtest."
 	dog.Tags = append(dog.Tags,
 		"speedtest.server:"+sc.Host(),
-		"speedtest.wifi_name:"+wifiName,
+		"speedtest.wifi_name:"+*wifiName,
 	)
 
-	log.Print("Monitoring network ", wifiName)
+	log.Print("Monitoring network ", *wifiName)
 	log.Print("Polling server ", sc.Host(), " in ", sc.Location())
 
 	err = dog.Incr("boot", nil, 1)

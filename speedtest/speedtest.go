@@ -54,7 +54,6 @@ func ReadConfig(r io.Reader) (*Config, error) {
 }
 
 func closestAvailableServer(cfg *stdn.Config, serverBlacklist []string) (*stdn.Testserver, error) {
-	var err error
 	blacklist := make(map[string]struct{})
 
 	for _, s := range serverBlacklist {
@@ -67,14 +66,14 @@ func closestAvailableServer(cfg *stdn.Config, serverBlacklist []string) (*stdn.T
 			continue
 		}
 
-		if _, err = s.MedianPing(1); err != nil {
+		if _, err := s.MedianPing(1); err != nil {
 			log.Println("failed to connect to %s, trying another. Error: %s", s.Host, err)
 			continue
 		}
 		return &s, nil
 	}
 
-	return nil, fmt.Errorf("no available servers: %s", err)
+	return nil, fmt.Errorf("no available servers")
 }
 
 // NewClient creates a speedtest.Client, or an error if it could not find a server.

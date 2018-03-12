@@ -37,8 +37,6 @@ type Result struct {
 	UploadSpeed   Speed
 	Ping          time.Duration
 	Err           error
-
-	dog *statsd.Client
 }
 
 func ReadConfig(r io.Reader) (*Config, error) {

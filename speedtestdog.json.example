@@ -1,0 +1,5 @@
+{
+  "serverBlacklist": [
+    "speedtest1.kitchener.tricitywifi.com:8080"
+  ]
+}

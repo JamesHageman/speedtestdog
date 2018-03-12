@@ -1,11 +1,14 @@
 package speedtest
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"time"
 
 	"github.com/DataDog/datadog-go/statsd"
+	"github.com/pkg/errors"
 	stdn "github.com/traetox/speedtest/speedtestdotnet"
 )
 
@@ -16,9 +19,14 @@ const (
 // Speed is bandwidth speed in bits/sec
 type Speed uint64
 
+type Config struct {
+	ServerBlacklist []string `json:"serverBlacklist,omitempty"`
+}
+
 // Client is the object used to connect to a speedtest server and run speed tests.
 type Client struct {
 	server *stdn.Testserver
+	config *Config
 	err    error
 }
 
@@ -33,9 +41,32 @@ type Result struct {
 	dog *statsd.Client
 }
 
-func closestAvailableServer(cfg *stdn.Config) (*stdn.Testserver, error) {
+func ReadConfig(r io.Reader) (*Config, error) {
+	var config Config
+	decoder := json.NewDecoder(r)
+	if err := decoder.Decode(&config); err != nil {
+		return nil, errors.Wrap(err, "Failed to parse config")
+	}
+	if config.ServerBlacklist == nil {
+		config.ServerBlacklist = []string{}
+	}
+	return &config, nil
+}
+
+func closestAvailableServer(cfg *stdn.Config, serverBlacklist []string) (*stdn.Testserver, error) {
 	var err error
-	for _, s := range cfg.Servers[:5] {
+	blacklist := make(map[string]struct{})
+
+	for _, s := range serverBlacklist {
+		blacklist[s] = struct{}{}
+	}
+
+	for _, s := range cfg.Servers {
+		if _, ok := blacklist[s.Host]; ok {
+			// server is blacklisted, skip.
+			continue
+		}
+
 		if _, err = s.MedianPing(1); err != nil {
 			log.Println("failed to connect to %s, trying another. Error: %s", s.Host, err)
 			continue
@@ -47,15 +78,15 @@ func closestAvailableServer(cfg *stdn.Config) (*stdn.Testserver, error) {
 }
 
 // NewClient creates a speedtest.Client, or an error if it could not find a server.
-func NewClient() (*Client, error) {
+func NewClient(config *Config) (*Client, error) {
 	log.Println("Fetching speedtest.net configuration...")
-	cfg, err := stdn.GetConfig()
+	stdnConfig, err := stdn.GetConfig()
 	if err != nil {
 		return nil, err
 	}
 
 	log.Println("Finding the closest server...")
-	server, err := closestAvailableServer(cfg)
+	server, err := closestAvailableServer(stdnConfig, config.ServerBlacklist)
 	if err != nil {
 		return nil, err
 	}

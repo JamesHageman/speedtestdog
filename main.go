@@ -33,6 +33,16 @@ func buildConfig(configFileName string) *speedtest.Config {
 	return config
 }
 
+func runTest(client *speedtest.Client, reporter *speedtest.Reporter) {
+	result := client.SpeedTest()
+	die(result.Err)
+
+	log.Println(result)
+
+	err := reporter.Report(result)
+	die(errors.Wrap(err, "DataDog error"))
+}
+
 func main() {
 	configFileName := flag.String("configFile", "speedtestdog.json", "the speedtest configuration json file")
 	statsdAddress := flag.String("statsdAddress", "localhost:8125", "the address of the DataDog agent")
@@ -61,21 +71,11 @@ func main() {
 	err = dog.Incr("boot", nil, 1)
 	die(err)
 
-	results := make(chan *speedtest.Result)
 	reporter := &speedtest.Reporter{Client: dog}
+	ticks := time.NewTicker(*pollDelay).C
 
-	go func() {
-		results <- sc.SpeedTest()
-		ticks := time.NewTicker(*pollDelay).C
-		for range ticks {
-			results <- sc.SpeedTest()
-		}
-	}()
-
-	for result := range results {
-		die(result.Err)
-		log.Println(result)
-		err := reporter.Report(result)
-		die(errors.Wrap(err, "DataDog error"))
+	runTest(sc, reporter)
+	for range ticks {
+		runTest(sc, reporter)
 	}
 }

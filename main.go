@@ -12,10 +12,6 @@ import (
 	wifiname "github.com/yelinaung/wifi-name"
 )
 
-const (
-	pollDelay = 30 * time.Second
-)
-
 func die(err error) {
 	if err != nil {
 		log.Fatalf("[ERROR] %+v", err)
@@ -41,6 +37,7 @@ func main() {
 	configFileName := flag.String("configFile", "speedtestdog.json", "the speedtest configuration json file")
 	statsdAddress := flag.String("statsdAddress", "localhost:8125", "the address of the DataDog agent")
 	wifiName := flag.String("wifiName", wifiname.WifiName(), "the name of your network")
+	pollDelay := flag.Duration("poll", 30*time.Second, "The wait time between successive speed tests")
 	flag.Parse()
 
 	config := buildConfig(*configFileName)
@@ -59,7 +56,7 @@ func main() {
 	)
 
 	log.Print("Monitoring network ", *wifiName)
-	log.Print("Polling server ", sc.Host(), " in ", sc.Location())
+	log.Print("Polling server ", sc.Host(), " in ", sc.Location(), " every ", pollDelay, ".")
 
 	err = dog.Incr("boot", nil, 1)
 	die(err)
@@ -69,7 +66,7 @@ func main() {
 
 	go func() {
 		results <- sc.SpeedTest()
-		ticks := time.NewTicker(pollDelay).C
+		ticks := time.NewTicker(*pollDelay).C
 		for range ticks {
 			results <- sc.SpeedTest()
 		}

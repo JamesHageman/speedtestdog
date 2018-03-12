@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/DataDog/datadog-go/statsd"
-	speedtest "github.com/JamesHageman/speedtestdog/speedtest"
+	"github.com/JamesHageman/speedtestdog/speedtest"
 	"github.com/pkg/errors"
 	wifiname "github.com/yelinaung/wifi-name"
 )

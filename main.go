@@ -7,6 +7,7 @@ import (
 
 	"github.com/DataDog/datadog-go/statsd"
 	speedtest "github.com/JamesHageman/speedtestdog/speedtest"
+	"github.com/pkg/errors"
 	wifiname "github.com/yelinaung/wifi-name"
 )
 
@@ -25,15 +26,25 @@ func init() {
 	}
 }
 
+func die(err error) {
+	if err != nil {
+		log.Fatalf("[ERROR] %+v", err)
+	}
+}
+
 func main() {
-	sc, err := speedtest.NewClient()
-	if err != nil {
-		log.Fatal("Error building speedtestConfig: ", err)
-	}
+	configFile, err := os.Open("speedtestdog.json")
+	die(err)
+
+	config, err := speedtest.ReadConfig(configFile)
+	die(err)
+	log.Printf("Config: %#v", *config)
+
+	sc, err := speedtest.NewClient(config)
+	die(err)
+
 	dog, err := statsd.New(statsdAddress)
-	if err != nil {
-		log.Fatal(err)
-	}
+	die(err)
 
 	dog.Namespace = "speedtest."
 	dog.Tags = append(dog.Tags,
@@ -45,9 +56,7 @@ func main() {
 	log.Print("Polling server ", sc.Host(), " in ", sc.Location())
 
 	err = dog.Incr("boot", nil, 1)
-	if err != nil {
-		log.Fatalln(err)
-	}
+	die(err)
 
 	results := make(chan *speedtest.Result)
 	reporter := &speedtest.Reporter{Client: dog}
@@ -61,14 +70,9 @@ func main() {
 	}()
 
 	for result := range results {
-		if result.Err != nil {
-			log.Fatalln(result)
-		}
-
+		die(result.Err)
 		log.Println(result)
 		err := reporter.Report(result)
-		if err != nil {
-			log.Fatalln("DataDog error:", err)
-		}
+		die(errors.Wrap(err, "DataDog error"))
 	}
 }

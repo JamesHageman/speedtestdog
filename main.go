@@ -32,12 +32,24 @@ func die(err error) {
 	}
 }
 
-func main() {
-	configFile, err := os.Open("speedtestdog.json")
-	die(err)
+func buildConfig() *speedtest.Config {
+	var config *speedtest.Config
+	configFileName := "speedtestdog.json"
+	configFile, err := os.Open(configFileName)
+	if err == nil {
+		log.Println("Reading config from", configFileName)
+		config, err = speedtest.ReadConfig(configFile)
+		die(err)
+	} else {
+		log.Println("Using default configuration")
+		config = &speedtest.Config{ServerBlacklist: []string{}}
+	}
 
-	config, err := speedtest.ReadConfig(configFile)
-	die(err)
+	return config
+}
+
+func main() {
+	config := buildConfig()
 	log.Printf("Config: %#v", *config)
 
 	sc, err := speedtest.NewClient(config)

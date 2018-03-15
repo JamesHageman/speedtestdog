@@ -12,10 +12,6 @@ import (
 	stdn "github.com/traetox/speedtest/speedtestdotnet"
 )
 
-const (
-	duration = 1
-)
-
 // Speed is bandwidth speed in bits/sec
 type Speed uint64
 
@@ -96,11 +92,12 @@ func (s Speed) String() string {
 }
 
 // SpeedTest runs a speedtest calculating download, upload and ping in sequence.
-func (c *Client) SpeedTest() *Result {
+func (c *Client) SpeedTest(duration time.Duration) *Result {
 	c.err = nil
-	d := c.download()
-	u := c.upload()
-	p := c.ping()
+	seconds := int(duration.Seconds())
+	d := c.download(seconds)
+	u := c.upload(seconds)
+	p := c.ping(seconds)
 
 	return &Result{DownloadSpeed: d, UploadSpeed: u, Ping: p, Err: c.err}
 }
@@ -115,7 +112,7 @@ func (c *Client) Location() string {
 	return c.server.Name
 }
 
-func (c *Client) download() Speed {
+func (c *Client) download(duration int) Speed {
 	if c.err != nil {
 		return 0
 	}
@@ -126,7 +123,7 @@ func (c *Client) download() Speed {
 	return Speed(s)
 }
 
-func (c *Client) upload() Speed {
+func (c *Client) upload(duration int) Speed {
 	if c.err != nil {
 		return 0
 	}
@@ -137,7 +134,7 @@ func (c *Client) upload() Speed {
 	return Speed(s)
 }
 
-func (c *Client) ping() time.Duration {
+func (c *Client) ping(duration int) time.Duration {
 	if c.err != nil {
 		return 0
 	}
